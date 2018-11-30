@@ -632,9 +632,9 @@ fn compute_internal(node: &style::Node, main: SizeConstraint, cross: SizeConstra
         }
       } else {
         let num_items = line.items.len();
-        let mut is_first = true;
 
-        for child in &mut line.items {
+        for (i, ref mut child) in &mut line.items.iter_mut().enumerate() {
+          let is_first = i == 0;
           child.main_margin_start = 0.0;
           child.main_margin_end = 0.0;
 
@@ -646,8 +646,6 @@ fn compute_internal(node: &style::Node, main: SizeConstraint, cross: SizeConstra
             style::JustifyContent::SpaceAround => if is_first { (free_space / num_items as f32) / 2.0 } else { free_space / num_items as f32 },
             style::JustifyContent::SpaceEvenly => free_space / (num_items + 1) as f32,
           };
-
-          is_first = false;
         }
       }
     }
