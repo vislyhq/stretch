@@ -45,7 +45,7 @@ impl SizeConstraint {
     }
 
     fn between(min: f32, max: f32) -> SizeConstraint {
-        SizeConstraint { min: min, max: max }
+        SizeConstraint { min, max }
     }
 }
 
@@ -292,7 +292,7 @@ fn compute_internal(
             for child in flex_items {
                 line_length += child.hypothetical_outer_main_size;
 
-                if line_length > avaliable_main && line.items.len() > 0 {
+                if line_length > avaliable_main && !line.items.is_empty() {
                     line_length = child.hypothetical_outer_main_size;
                     lines.push(line);
                     line = FlexLine {
@@ -384,7 +384,7 @@ fn compute_internal(
                 }
             }
 
-            if unfrozen.len() == 0 {
+            if unfrozen.is_empty() {
                 break;
             }
 
@@ -810,7 +810,7 @@ fn compute_internal(
     } else {
         total_cross_size
     }.min(cross.max)
-    .max(cross.min);;
+    .max(cross.min);
 
     // 16. Align all flex lines per align-content.
 
@@ -916,6 +916,6 @@ fn compute_internal(
             main: container_main_size,
             cross: container_cross_size,
         },
-        children: children,
+        children,
     }
 }
