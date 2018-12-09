@@ -22,11 +22,7 @@ fn yoga(n: u64) {
     node.insert_child(&mut other_child, 1);
 
     style!(node,
-        Margin(10 pt),
-        MarginLeft(Auto),
-        PaddingHorizontal(4 pt),
-        Left(16 %),
-        Bottom(UndefinedValue)
+        PaddingHorizontal(4 pt)
     );
 
     let child_styles = make_styles!(
@@ -39,24 +35,16 @@ fn yoga(n: u64) {
     child.apply_styles(&child_styles);
     other_child.apply_styles(&child_styles);
 
-    node.calculate_layout(512.0, 512.0, yoga::Direction::LTR);
+    node.calculate_layout(yoga::Undefined, yoga::Undefined, yoga::Direction::LTR);
 }
 
 fn stretch(n: u64) {
     stretch::compute(&stretch::style::Node {
-        margin: stretch::style::Edges {
-            top: stretch::style::Dimension::Points(10.0),
-            start: stretch::style::Dimension::Auto,
-            bottom: stretch::style::Dimension::Points(10.0),
-            end: stretch::style::Dimension::Points(10.0),
-            ..Default::default()
-        },
         padding: stretch::style::Edges {
             start: stretch::style::Dimension::Points(4.0),
             end: stretch::style::Dimension::Points(4.0),
             ..Default::default()
         },
-        start: stretch::style::Dimension::Percent(16.0),
         children: vec![stretch::style::Node {
             width: stretch::style::Dimension::Points(n as f32),
             height: stretch::style::Dimension::Points(32.0),
