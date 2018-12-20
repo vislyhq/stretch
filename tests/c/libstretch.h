@@ -148,12 +148,12 @@ typedef struct {
     void *children;
 } LayoutNode;
 
-void add_style_node(StyleNode *style, StyleNode *child);
+void stretch_add_child(StyleNode *style, StyleNode *child);
 
-void cleanup_layout_node(LayoutNode *node);
+void stretch_cleanup_layout(LayoutNode *node);
 
-void cleanup_style_node(StyleNode *node);
+void stretch_cleanup_style(StyleNode *node);
 
-LayoutNode *compute_layout_node(StyleNode *root);
+LayoutNode *stretch_compute_layout(StyleNode *root);
 
-StyleNode *create_style_node(void);
+StyleNode *stretch_new_style(void);

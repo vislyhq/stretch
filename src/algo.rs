@@ -55,21 +55,21 @@ struct FlexLine<'a> {
 }
 
 #[no_mangle]
-pub extern "C" fn create_style_node() -> *mut style::StyleNode {
+pub extern "C" fn stretch_new_style() -> *mut style::StyleNode {
     let node: style::Node = Default::default();
 
     Box::into_raw(Box::new(node))
 }
 
 #[no_mangle]
-pub extern "C" fn add_style_node(style: &mut style::StyleNode, child: *mut style::StyleNode) {
+pub extern "C" fn stretch_add_child(style: &mut style::StyleNode, child: *mut style::StyleNode) {
     let child = unsafe { Box::from_raw(child) };
 
     (*style.children).push(*child);
 }
 
 #[no_mangle]
-pub extern "C" fn compute_layout_node(root: *mut style::StyleNode) -> *mut layout::LayoutNode {
+pub extern "C" fn stretch_compute_layout(root: *mut style::StyleNode) -> *mut layout::LayoutNode {
     let root = unsafe { Box::from_raw(root) };
     let layout = compute(&root);
 
@@ -79,12 +79,12 @@ pub extern "C" fn compute_layout_node(root: *mut style::StyleNode) -> *mut layou
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn cleanup_layout_node(node: *mut layout::LayoutNode) {
+pub unsafe extern "C" fn stretch_cleanup_layout(node: *mut layout::LayoutNode) {
     Box::from_raw(node);
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn cleanup_style_node(node: *mut style::StyleNode) {
+pub unsafe extern "C" fn stretch_cleanup_style(node: *mut style::StyleNode) {
     Box::from_raw(node);
 }
 

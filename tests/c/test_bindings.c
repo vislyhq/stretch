@@ -1,31 +1,30 @@
 #include "libstretch.h"
 #include <assert.h>
-#include <stdio.h>
 
 int main() {
-    StyleNode *child1 = create_style_node();
+    StyleNode *child1 = stretch_new_style();
     child1->size.width.unit = UNIT_POINTS;
     child1->size.width.value = 123.0f;
     child1->size.height.unit = UNIT_POINTS;
     child1->size.height.value = 321.0f;
 
-    StyleNode *child2 = create_style_node();
+    StyleNode *child2 = stretch_new_style();
     child2->size.width.unit = UNIT_POINTS;
     child2->size.width.value = 234.0f;
     child2->size.height.unit = UNIT_POINTS;
     child2->size.height.value = 432.0f;
 
-    StyleNode *node = create_style_node();
+    StyleNode *node = stretch_new_style();
 
-    add_style_node(node, child1);
-    add_style_node(node, child2);
+    stretch_add_child(node, child1);
+    stretch_add_child(node, child2);
 
-    LayoutNode *layout = compute_layout_node(node);
+    LayoutNode *layout = stretch_compute_layout(node);
 
-    cleanup_style_node(node);
+    stretch_cleanup_style(node);
 
     assert(layout->size.height == 432.0);
     assert(layout->size.width == 357.0);
 
-    cleanup_layout_node(layout);
+    stretch_cleanup_layout(layout);
 }
