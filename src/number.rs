@@ -1,5 +1,6 @@
 use std::ops;
 
+#[repr(C)]
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum Number {
     Defined(f32),

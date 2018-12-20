@@ -1,6 +1,9 @@
+use std::ffi::c_void;
+use crate::array::Array;
 use crate::geometry::{Rect, Size};
 use crate::number::Number;
 
+#[repr(C)]
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum AlignItems {
     FlexStart,
@@ -16,6 +19,7 @@ impl Default for AlignItems {
     }
 }
 
+#[repr(C)]
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum AlignSelf {
     Auto,
@@ -32,6 +36,7 @@ impl Default for AlignSelf {
     }
 }
 
+#[repr(C)]
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum AlignContent {
     FlexStart,
@@ -48,6 +53,7 @@ impl Default for AlignContent {
     }
 }
 
+#[repr(C)]
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum Direction {
     Inherit,
@@ -61,6 +67,7 @@ impl Default for Direction {
     }
 }
 
+#[repr(C)]
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum Display {
     Flex,
@@ -73,6 +80,7 @@ impl Default for Display {
     }
 }
 
+#[repr(C)]
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum FlexDirection {
     Row,
@@ -101,6 +109,7 @@ impl FlexDirection {
     }
 }
 
+#[repr(C)]
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum JustifyContent {
     FlexStart,
@@ -117,6 +126,7 @@ impl Default for JustifyContent {
     }
 }
 
+#[repr(C)]
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum Overflow {
     Visible,
@@ -130,6 +140,7 @@ impl Default for Overflow {
     }
 }
 
+#[repr(C)]
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum PositionType {
     Relative,
@@ -142,6 +153,7 @@ impl Default for PositionType {
     }
 }
 
+#[repr(C)]
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum FlexWrap {
     NoWrap,
@@ -155,6 +167,7 @@ impl Default for FlexWrap {
     }
 }
 
+#[repr(C)]
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum Dimension {
     Undefined,
@@ -189,6 +202,41 @@ impl Default for Size<Dimension> {
     fn default() -> Size<Dimension> {
         Size { width: Dimension::Auto, height: Dimension::Auto }
     }
+}
+
+#[repr(C)]
+pub struct StyleNode {
+    pub display: Display,
+
+    pub position_type: PositionType,
+    pub direction: Direction,
+    pub flex_direction: FlexDirection,
+
+    pub flex_wrap: FlexWrap,
+    pub overflow: Overflow,
+
+    pub align_items: AlignItems,
+    pub align_self: AlignSelf,
+    pub align_content: AlignContent,
+
+    pub justify_content: JustifyContent,
+
+    pub position: Rect<Dimension>,
+    pub margin: Rect<Dimension>,
+    pub padding: Rect<Dimension>,
+    pub border: Rect<Dimension>,
+
+    pub flex_grow: f32,
+    pub flex_shrink: f32,
+    pub flex_basis: Dimension,
+
+    pub size: Size<Dimension>,
+    pub min_size: Size<Dimension>,
+    pub max_size: Size<Dimension>,
+
+    pub aspect_ratio: Number,
+
+    pub children: Array<c_void>,
 }
 
 #[derive(Debug)]

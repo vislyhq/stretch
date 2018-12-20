@@ -2,6 +2,7 @@ use std::ops::Add;
 
 use crate::style;
 
+#[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct Rect<T> {
     pub start: T,
@@ -79,6 +80,7 @@ where
     }
 }
 
+#[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct Size<T> {
     pub width: T,
@@ -122,6 +124,7 @@ impl<T> Size<T> {
     }
 }
 
+#[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct Point<T> {
     pub x: T,
