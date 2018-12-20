@@ -1,7 +1,5 @@
 use ref_eq::ref_eq;
 use std::f32;
-use std::mem;
-use std::ffi::c_void;
 
 use crate::layout;
 
@@ -59,37 +57,25 @@ struct FlexLine<'a> {
 #[no_mangle]
 pub extern "C" fn create_style_node() -> *mut style::StyleNode {
     let node: style::Node = Default::default();
-    let style = style::Node::to_style_node(Box::new(node));
 
-    Box::into_raw(style)
+    Box::into_raw(Box::new(node))
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn add_style_node(style: *mut style::StyleNode, child: *const style::StyleNode) {
-    let mut children = Vec::from_raw_parts(
-        (*style).children.pointer as *mut style::Node,
-        (*style).children.length,
-        (*style).children.capacity
-    );
+pub extern "C" fn add_style_node(style: &mut style::StyleNode, child: *mut style::StyleNode) {
+    let child = unsafe { Box::from_raw(child) };
 
-    let node = *style::StyleNode::to_node(child);
-
-    children.push(node);
-
-    (*style).children.pointer = children.as_ptr() as *const c_void;
-    (*style).children.length = children.len();
-    (*style).children.capacity = children.capacity();
-
-    mem::forget(children);
+    (*style.children).push(*child);
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn compute_layout_node(root: *const style::StyleNode) -> *mut layout::LayoutNode {
-    let node = style::StyleNode::to_node(root);
-    let layout = layout::Node::to_layout_node(&compute(&node));
+pub extern "C" fn compute_layout_node(root: *mut style::StyleNode) -> *mut layout::LayoutNode {
+    let root = unsafe { Box::from_raw(root) };
+    let layout = compute(&root);
 
-    Box::into_raw(node);
-    Box::into_raw(layout)
+    Box::into_raw(root);
+
+    Box::into_raw(Box::new(layout))
 }
 
 #[no_mangle]
@@ -136,7 +122,7 @@ pub fn compute(root: &style::Node) -> layout::Node {
         order: 0,
         size: Size { width: result.size.width, height: result.size.height },
         location: Point { x: 0.0, y: 0.0 },
-        children: result.children,
+        children: Box::new(result.children),
     };
 
     round_layout(&mut layout, 0.0, 0.0);
@@ -151,7 +137,8 @@ fn round_layout(layout: &mut layout::Node, abs_x: f32, abs_y: f32) {
     layout.location.y = layout.location.y.round();
     layout.size.width = (abs_x + layout.size.width).round() - abs_x.round();
     layout.size.height = (abs_y + layout.size.height).round() - abs_y.round();
-    layout.children.iter_mut().for_each(|child| round_layout(child, abs_x, abs_y));
+
+    (*layout.children).iter_mut().for_each(|child| round_layout(child, abs_x, abs_y));
 }
 
 fn compute_internal(
@@ -162,7 +149,6 @@ fn compute_internal(
 ) -> ComputeResult {
     // Define some general constants we will need for the remainder
     // of the algorithm.
-
     let dir = node.flex_direction;
     let is_row = dir.is_row();
     let is_column = dir.is_column();
@@ -205,8 +191,7 @@ fn compute_internal(
         height: node_size.height.or_else(parent_size.height - margin.vertical()) - padding_border.vertical(),
     };
 
-    let mut flex_items: Vec<FlexItem> = node
-        .children
+    let mut flex_items: Vec<FlexItem> = (*node.children)
         .iter()
         .filter(|child| child.position_type != PositionType::Absolute)
         .filter(|child| child.display != Display::None)
@@ -653,10 +638,10 @@ fn compute_internal(
     // TODO - This is expensive and should only be done if we really require a baseline. aka, make it lazy
 
     fn calc_baseline(layout: &layout::Node) -> f32 {
-        if layout.children.is_empty() {
+        if (*layout.children).is_empty() {
             layout.size.height
         } else {
-            calc_baseline(&layout.children[0])
+            calc_baseline(&(*layout.children)[0])
         }
     };
 
@@ -682,11 +667,12 @@ fn compute_internal(
                 },
                 percent_calc_base_child,
             );
+
             child.baseline = calc_baseline(&layout::Node {
-                order: node.children.iter().position(|n| ref_eq(n, child.node)).unwrap() as u32,
+                order: (*node.children).iter().position(|n| ref_eq(n, child.node)).unwrap() as u32,
                 size: result.size,
                 location: Point { x: 0.0, y: 0.0 },
-                children: result.children,
+                children: Box::new(result.children),
             });
         });
     });
@@ -1076,13 +1062,13 @@ fn compute_internal(
                     + (child.position.cross_start(dir).or_else(0.0) - child.position.cross_end(dir).or_else(0.0));
 
                 children.push(layout::Node {
-                    order: node.children.iter().position(|n| ref_eq(n, child.node)).unwrap() as u32,
+                    order: (*node.children).iter().position(|n| ref_eq(n, child.node)).unwrap() as u32,
                     size: result.size,
                     location: Point {
                         x: if is_row { offset_main } else { offset_cross },
                         y: if is_column { offset_main } else { offset_cross },
                     },
-                    children: result.children,
+                    children: Box::new(result.children),
                 });
 
                 total_offset_main += child.offset_main + child.margin.main(dir) + result.size.main(dir);
@@ -1117,8 +1103,7 @@ fn compute_internal(
     };
 
     // Before returning we perform absolute layout on all absolutely positioned children
-    let mut absolute_children: Vec<layout::Node> = node
-        .children
+    let mut absolute_children: Vec<layout::Node> = (*node.children)
         .iter()
         .filter(|child| child.position_type == PositionType::Absolute)
         .map(|child| {
@@ -1219,13 +1204,13 @@ fn compute_internal(
             };
 
             layout::Node {
-                order: node.children.iter().position(|n| ref_eq(n, child)).unwrap() as u32,
+                order: (*node.children).iter().position(|n| ref_eq(n, child)).unwrap() as u32,
                 size: result.size,
                 location: Point {
                     x: if is_row { offset_main } else { offset_cross },
                     y: if is_column { offset_main } else { offset_cross },
                 },
-                children: result.children,
+                children: Box::new(result.children),
             }
         })
         .collect();
@@ -1234,15 +1219,14 @@ fn compute_internal(
 
     fn hidden_layout(parent: &style::Node, node: &style::Node) -> layout::Node {
         layout::Node {
-            order: parent.children.iter().position(|n| ref_eq(n, node)).unwrap() as u32,
+            order: (*parent.children).iter().position(|n| ref_eq(n, node)).unwrap() as u32,
             size: Size { width: 0.0, height: 0.0 },
             location: Point { x: 0.0, y: 0.0 },
-            children: node.children.iter().map(|child| hidden_layout(node, child)).collect(),
+            children: Box::new((*node.children).iter().map(|child| hidden_layout(node, child)).collect()),
         }
     }
 
-    let mut hidden_children: Vec<layout::Node> = node
-        .children
+    let mut hidden_children: Vec<layout::Node> = (*node.children)
         .iter()
         .filter(|child| child.display == Display::None)
         .map(|child| hidden_layout(node, child))

@@ -1,5 +1,3 @@
-use std::ffi::c_void;
-use crate::array::Array;
 use crate::geometry::{Rect, Size};
 use crate::number::Number;
 
@@ -236,89 +234,10 @@ pub struct StyleNode {
 
     pub aspect_ratio: Number,
 
-    pub children: Array<c_void>,
+    pub children: Box<Vec<StyleNode>>,
 }
 
-impl StyleNode {
-    pub(crate) unsafe fn to_node(style: *const StyleNode) -> Box<Node> {
-        let children = Vec::from_raw_parts(
-            (*style).children.pointer as *mut Node,
-            (*style).children.length,
-            (*style).children.capacity
-        );
-
-        let node = Node {
-            display: (*style).display,
-
-            position_type: (*style).position_type,
-            direction: (*style).direction,
-            flex_direction: (*style).flex_direction,
-
-            flex_wrap: (*style).flex_wrap,
-            overflow: (*style).overflow,
-
-            align_items: (*style).align_items,
-            align_self: (*style).align_self,
-            align_content: (*style).align_content,
-
-            justify_content: (*style).justify_content,
-
-            position: (*style).position,
-            margin: (*style).margin,
-            padding: (*style).padding,
-            border: (*style).border,
-
-            flex_grow: (*style).flex_grow,
-            flex_shrink: (*style).flex_shrink,
-            flex_basis: (*style).flex_basis,
-
-            size: (*style).size,
-            min_size: (*style).min_size,
-            max_size: (*style).max_size,
-
-            aspect_ratio: (*style).aspect_ratio,
-
-            children: children,
-        };
-
-        Box::new(node)
-    }
-}
-
-#[derive(Debug)]
-pub struct Node {
-    pub display: Display,
-
-    pub position_type: PositionType,
-    pub direction: Direction,
-    pub flex_direction: FlexDirection,
-
-    pub flex_wrap: FlexWrap,
-    pub overflow: Overflow,
-
-    pub align_items: AlignItems,
-    pub align_self: AlignSelf,
-    pub align_content: AlignContent,
-
-    pub justify_content: JustifyContent,
-
-    pub position: Rect<Dimension>,
-    pub margin: Rect<Dimension>,
-    pub padding: Rect<Dimension>,
-    pub border: Rect<Dimension>,
-
-    pub flex_grow: f32,
-    pub flex_shrink: f32,
-    pub flex_basis: Dimension,
-
-    pub size: Size<Dimension>,
-    pub min_size: Size<Dimension>,
-    pub max_size: Size<Dimension>,
-
-    pub aspect_ratio: Number,
-
-    pub children: Vec<Node>,
-}
+pub type Node = StyleNode;
 
 impl Default for Node {
     fn default() -> Node {
@@ -353,56 +272,12 @@ impl Default for Node {
 
             aspect_ratio: Default::default(),
 
-            children: vec![],
+            children: Box::new(vec![]),
         }
     }
 }
 
 impl Node {
-    pub(crate) fn to_style_node(node: Box<Node>) -> Box<StyleNode> {
-        let children = Array {
-            pointer: (*node).children.as_ptr() as *const c_void,
-            length: (*node).children.len(),
-            capacity: (*node).children.capacity(),
-        };
-
-        let style = StyleNode {
-            display: (*node).display,
-
-            position_type: (*node).position_type,
-            direction: (*node).direction,
-            flex_direction: (*node).flex_direction,
-
-            flex_wrap: (*node).flex_wrap,
-            overflow: (*node).overflow,
-
-            align_items: (*node).align_items,
-            align_self: (*node).align_self,
-            align_content: (*node).align_content,
-
-            justify_content: (*node).justify_content,
-
-            position: (*node).position,
-            margin: (*node).margin,
-            padding: (*node).padding,
-            border: (*node).border,
-
-            flex_grow: (*node).flex_grow,
-            flex_shrink: (*node).flex_shrink,
-            flex_basis: (*node).flex_basis,
-
-            size: (*node).size,
-            min_size: (*node).min_size,
-            max_size: (*node).max_size,
-
-            aspect_ratio: (*node).aspect_ratio,
-
-            children: children,
-        };
-
-        Box::new(style)
-    }
-
     pub(crate) fn min_main_size(&self, direction: FlexDirection) -> Dimension {
         match direction {
             FlexDirection::Row | FlexDirection::RowReverse => self.min_size.width,
