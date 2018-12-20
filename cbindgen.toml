@@ -1,0 +1,5 @@
+language = "C"
+
+[enum]
+prefix_with_name = true
+rename_variants = "QualifiedScreamingSnakeCase"
