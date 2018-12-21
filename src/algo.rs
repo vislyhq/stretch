@@ -62,10 +62,13 @@ pub extern "C" fn stretch_new_style() -> *mut style::StyleNode {
 }
 
 #[no_mangle]
-pub extern "C" fn stretch_add_child(style: &mut style::StyleNode, child: *mut style::StyleNode) {
+pub extern "C" fn stretch_add_child(style: *mut style::StyleNode, child: *mut style::StyleNode) {
     let child = unsafe { Box::from_raw(child) };
+    let mut style = unsafe { Box::from_raw(style) };
 
-    (*style.children).push(*child);
+    style.children.push(*child);
+
+    Box::into_raw(style);
 }
 
 #[no_mangle]
