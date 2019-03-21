@@ -10,5 +10,4 @@ pub mod result;
 pub mod style;
 
 mod algo;
-mod ref_eq;
-pub use crate::algo::compute;
+pub use crate::algo::{compute, Database};

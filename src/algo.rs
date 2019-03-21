@@ -2,8 +2,6 @@
 use alloc::{vec, vec::Vec};
 
 use crate::layout;
-use crate::ref_eq::ref_eq;
-
 use crate::style;
 use crate::style::*;
 
@@ -40,8 +38,27 @@ pub trait Stretch: salsa::Database {
 
 #[salsa::database(StretchStorage)]
 #[derive(Default)]
-struct Database {
+pub struct Database {
     runtime: salsa::Runtime<Database>,
+    current_node_id: usize,
+}
+
+impl Database {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn set_children(&mut self, node: NodeId, children: impl Into<Arc<[NodeId]>>) {
+        Stretch::set_children(self, node, children.into());
+    }
+
+    pub fn new_node(&mut self, style: crate::style::Node) -> NodeId {
+        let id = NodeId(self.current_node_id);
+        self.current_node_id += 1;
+        self.set_style(id, style);
+        self.set_children(id, Vec::new());
+        id
+    }
 }
 
 impl salsa::Database for Database {
@@ -747,7 +764,7 @@ fn compute_internal(
             )?;
 
             child.baseline = calc_baseline(&layout::Node {
-                order: db.children(node).iter().position(|n| ref_eq(n, &child.node)).unwrap() as u32,
+                order: db.children(node).iter().position(|&n| n == child.node).unwrap() as u32,
                 size: result.size,
                 location: Point { x: R32::zero(), y: R32::zero() },
                 children: result.children,
@@ -1152,7 +1169,7 @@ fn compute_internal(
                         - child.position.cross_end(dir).or_else(R32::zero()));
 
                 children.push(layout::Node {
-                    order: db.children(node).iter().position(|n| ref_eq(n, &child.node)).unwrap() as u32,
+                    order: db.children(node).iter().position(|&n| n == child.node).unwrap() as u32,
                     size: result.size,
                     location: Point {
                         x: if is_row { offset_main } else { offset_cross },

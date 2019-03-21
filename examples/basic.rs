@@ -2,19 +2,21 @@ use stretch::geometry::Size;
 use stretch::style::*;
 
 fn main() {
-    let node = Node {
-        size: Size { width: Dimension::Points(100.0), height: Dimension::Points(100.0) },
+    let mut db = stretch::Database::new();
+    let root = db.new_node(Node {
+        size: Size { width: Dimension::Points(100.0.into()), height: Dimension::Points(100.0.into()) },
         justify_content: JustifyContent::Center,
-
-        children: vec![Node {
-            size: Size { width: Dimension::Percent(0.5), height: Dimension::Auto },
-            ..Default::default()
-        }],
-
         ..Default::default()
-    };
+    });
 
-    let layout = stretch::compute(&node, Size::undefined()).unwrap();
+    let half_child = db.new_node(Node {
+        size: Size { width: Dimension::Percent(0.5.into()), height: Dimension::Auto },
+        ..Default::default()
+    });
+
+    db.set_children(root, vec![half_child]);
+
+    let layout = stretch::compute(&mut db, root, Size::undefined()).unwrap();
 
     println!("{:#?}", layout);
 }
