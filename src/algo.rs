@@ -1,9 +1,5 @@
 #[cfg(not(feature = "std"))]
 use alloc::{vec, vec::Vec};
-#[cfg(not(feature = "std"))]
-use libm::F32Ext;
-
-use core::f32;
 
 use crate::layout;
 use crate::ref_eq::ref_eq;
@@ -18,77 +14,113 @@ use crate::result::Result;
 
 use crate::geometry::{Point, Rect, Size};
 
+use std::sync::Arc;
+
+use decorum::{Encoding, Real, R32};
+use num_traits::identities::Zero;
+
 #[derive(Debug, Clone)]
 pub struct ComputeResult {
-    pub size: Size<f32>,
+    pub size: Size<R32>,
     pub children: Vec<layout::Node>,
 }
 
-struct FlexItem<'a> {
-    node: &'a style::Node,
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct NodeId(usize);
+
+#[salsa::query_group(StretchStorage)]
+pub trait Stretch: salsa::Database {
+    #[salsa::input]
+    fn style(&self, id: NodeId) -> style::Node;
+    #[salsa::input]
+    fn children(&self, id: NodeId) -> Arc<[NodeId]>;
+
+    // fn compute(&mut self, size: Size<Number>) -> Result<layout::Node>;
+}
+
+#[salsa::database(StretchStorage)]
+#[derive(Default)]
+struct Database {
+    runtime: salsa::Runtime<Database>,
+}
+
+impl salsa::Database for Database {
+    fn salsa_runtime(&self) -> &salsa::Runtime<Database> {
+        &self.runtime
+    }
+}
+
+struct FlexItem {
+    node: NodeId,
 
     size: Size<Number>,
     min_size: Size<Number>,
     max_size: Size<Number>,
 
     position: Rect<Number>,
-    margin: Rect<f32>,
-    padding: Rect<f32>,
-    border: Rect<f32>,
+    margin: Rect<R32>,
+    padding: Rect<R32>,
+    border: Rect<R32>,
 
-    flex_basis: f32,
-    inner_flex_basis: f32,
-    violation: f32,
+    flex_basis: R32,
+    inner_flex_basis: R32,
+    violation: R32,
     frozen: bool,
 
-    hypothetical_inner_size: Size<f32>,
-    hypothetical_outer_size: Size<f32>,
-    target_size: Size<f32>,
-    outer_target_size: Size<f32>,
+    hypothetical_inner_size: Size<R32>,
+    hypothetical_outer_size: Size<R32>,
+    target_size: Size<R32>,
+    outer_target_size: Size<R32>,
 
-    baseline: f32,
+    baseline: R32,
 
     // temporary values for holding offset in the main / cross direction.
     // offset is the relative position from the item's natural flow position based on
     // relative position values, alignment, and justification. Does not include margin/padding/border.
-    offset_main: f32,
-    offset_cross: f32,
+    offset_main: R32,
+    offset_cross: R32,
 }
 
-struct FlexLine<'a> {
-    items: Vec<FlexItem<'a>>,
-    cross_size: f32,
-    offset_cross: f32,
+struct FlexLine {
+    items: Vec<FlexItem>,
+    cross_size: R32,
+    offset_cross: R32,
 }
 
-pub fn compute(root: &style::Node, size: Size<Number>) -> Result<layout::Node> {
-    let has_root_min_max = root.min_size.width.is_defined()
-        || root.min_size.height.is_defined()
-        || root.max_size.width.is_defined()
-        || root.max_size.height.is_defined();
+pub fn compute(db: &mut impl Stretch, root: NodeId, size: Size<Number>) -> Result<layout::Node> {
+    let root_style = db.style(root);
+    let has_root_min_max = root_style.min_size.width.is_defined()
+        || root_style.min_size.height.is_defined()
+        || root_style.max_size.width.is_defined()
+        || root_style.max_size.height.is_defined();
 
     let result = if has_root_min_max {
         let first_pass = compute_internal(
+            db,
             root,
-            Size { width: root.size.width.resolve(size.width), height: root.size.height.resolve(size.height) },
+            Size {
+                width: root_style.size.width.resolve(size.width),
+                height: root_style.size.height.resolve(size.height),
+            },
             size,
             false,
         )?;
 
         compute_internal(
+            db,
             root,
             Size {
                 width: first_pass
                     .size
                     .width
-                    .maybe_max(root.min_size.width.resolve(size.width))
-                    .maybe_min(root.max_size.width.resolve(size.width))
+                    .maybe_max(root_style.min_size.width.resolve(size.width))
+                    .maybe_min(root_style.max_size.width.resolve(size.width))
                     .to_number(),
                 height: first_pass
                     .size
                     .height
-                    .maybe_max(root.min_size.height.resolve(size.height))
-                    .maybe_min(root.max_size.height.resolve(size.height))
+                    .maybe_max(root_style.min_size.height.resolve(size.height))
+                    .maybe_min(root_style.max_size.height.resolve(size.height))
                     .to_number(),
             },
             size,
@@ -96,8 +128,12 @@ pub fn compute(root: &style::Node, size: Size<Number>) -> Result<layout::Node> {
         )?
     } else {
         compute_internal(
+            db,
             root,
-            Size { width: root.size.width.resolve(size.width), height: root.size.height.resolve(size.height) },
+            Size {
+                width: root_style.size.width.resolve(size.width),
+                height: root_style.size.height.resolve(size.height),
+            },
             size,
             true,
         )?
@@ -106,15 +142,15 @@ pub fn compute(root: &style::Node, size: Size<Number>) -> Result<layout::Node> {
     let mut layout = layout::Node {
         order: 0,
         size: Size { width: result.size.width, height: result.size.height },
-        location: Point { x: 0.0, y: 0.0 },
+        location: Point { x: R32::zero(), y: R32::zero() },
         children: result.children,
     };
 
-    round_layout(&mut layout, 0.0, 0.0);
+    round_layout(&mut layout, R32::zero(), R32::zero());
     Ok(layout)
 }
 
-fn round_layout(layout: &mut layout::Node, abs_x: f32, abs_y: f32) {
+fn round_layout(layout: &mut layout::Node, abs_x: R32, abs_y: R32) {
     let abs_x = abs_x + layout.location.x;
     let abs_y = abs_y + layout.location.y;
 
@@ -126,68 +162,35 @@ fn round_layout(layout: &mut layout::Node, abs_x: f32, abs_y: f32) {
 }
 
 fn compute_internal(
-    node: &style::Node,
+    db: &impl Stretch,
+    node: NodeId,
     node_size: Size<Number>,
     parent_size: Size<Number>,
     perform_layout: bool,
 ) -> Result<ComputeResult> {
-    // First we check if we have a result for the given input
-    {
-        let layout_cache = node.layout_cache.borrow();
-        if let Some(cache) = layout_cache.as_ref() {
-            if cache.perform_layout || !perform_layout {
-                let width_compatible = if let Number::Defined(width) = node_size.width {
-                    (width - cache.result.size.width).abs() < f32::EPSILON
-                } else {
-                    cache.node_size.width.is_undefined()
-                };
-
-                let height_compatible = if let Number::Defined(height) = node_size.height {
-                    (height - cache.result.size.height).abs() < f32::EPSILON
-                } else {
-                    cache.node_size.height.is_undefined()
-                };
-
-                if width_compatible && height_compatible {
-                    return Ok(cache.result.clone());
-                }
-
-                if cache.node_size == node_size && cache.parent_size == parent_size {
-                    return Ok(cache.result.clone());
-                }
-            }
-        }
-    }
-
     // If this is a leaf node we can skip a lot of this function in some cases
-    if node.children.is_empty() {
+    if db.children(node).is_empty() {
         if node_size.width.is_defined() && node_size.height.is_defined() {
-            return Ok(ComputeResult { size: node_size.map(|s| s.or_else(0.0)), children: vec![] });
+            return Ok(ComputeResult { size: node_size.map(|s| s.or_else(R32::zero())), children: vec![] });
         }
 
-        if let Some(ref measure) = node.measure {
-            let result = ComputeResult { size: measure(node_size)?, children: vec![] };
-            node.layout_cache.replace(Some(LayoutCache {
-                node_size,
-                parent_size,
-                perform_layout,
-                result: result.clone(),
-            }));
-            return Ok(result);
+        if let Some(ref measure) = db.style(node).measure {
+            return Ok(ComputeResult { size: measure(node_size)?, children: vec![] });
         }
     }
 
     // Define some general constants we will need for the remainder
     // of the algorithm.
 
-    let dir = node.flex_direction;
+    let style = db.style(node);
+    let dir = style.flex_direction;
     let is_row = dir.is_row();
     let is_column = dir.is_column();
-    let is_wrap_reverse = node.flex_wrap == FlexWrap::WrapReverse;
+    let is_wrap_reverse = style.flex_wrap == FlexWrap::WrapReverse;
 
-    let margin = node.margin.map(|n| n.resolve(parent_size.width).or_else(0.0));
-    let padding = node.padding.map(|n| n.resolve(parent_size.width).or_else(0.0));
-    let border = node.border.map(|n| n.resolve(parent_size.width).or_else(0.0));
+    let margin = style.margin.map(|n| n.resolve(parent_size.width).or_else(R32::zero()));
+    let padding = style.padding.map(|n| n.resolve(parent_size.width).or_else(R32::zero()));
+    let border = style.border.map(|n| n.resolve(parent_size.width).or_else(R32::zero()));
 
     let padding_border = Rect {
         start: padding.start + border.start,
@@ -201,8 +204,8 @@ fn compute_internal(
         height: node_size.height - padding_border.vertical(),
     };
 
-    let mut container_size = Size { width: 0.0, height: 0.0 };
-    let mut inner_container_size = Size { width: 0.0, height: 0.0 };
+    let mut container_size: Size<R32> = Size { width: R32::zero(), height: R32::zero() };
+    let mut inner_container_size: Size<R32> = Size { width: R32::zero(), height: R32::zero() };
 
     // 9.2. Line Length Determination
 
@@ -221,13 +224,14 @@ fn compute_internal(
         height: node_size.height.or_else(parent_size.height - margin.vertical()) - padding_border.vertical(),
     };
 
-    let mut flex_items: Vec<FlexItem> = node
-        .children
+    let mut flex_items: Vec<FlexItem> = db
+        .children(node)
         .iter()
-        .filter(|child| child.position_type != PositionType::Absolute)
-        .filter(|child| child.display != Display::None)
-        .map(|child| FlexItem {
-            node: child,
+        .map(|&child| (child, db.style(child)))
+        .filter(|(_, child)| child.position_type != PositionType::Absolute)
+        .filter(|(_, child)| child.display != Display::None)
+        .map(|(id, child)| FlexItem {
+            node: id,
 
             size: Size {
                 width: child.size.width.resolve(node_inner_size.width),
@@ -245,24 +249,24 @@ fn compute_internal(
             },
 
             position: child.position.map(|p| p.resolve(node_inner_size.width)),
-            margin: child.margin.map(|m| m.resolve(node_inner_size.width).or_else(0.0)),
-            padding: child.padding.map(|p| p.resolve(node_inner_size.width).or_else(0.0)),
-            border: child.border.map(|b| b.resolve(node_inner_size.width).or_else(0.0)),
+            margin: child.margin.map(|m| m.resolve(node_inner_size.width).or_else(R32::zero())),
+            padding: child.padding.map(|p| p.resolve(node_inner_size.width).or_else(R32::zero())),
+            border: child.border.map(|b| b.resolve(node_inner_size.width).or_else(R32::zero())),
 
-            flex_basis: 0.0,
-            inner_flex_basis: 0.0,
-            violation: 0.0,
+            flex_basis: R32::zero(),
+            inner_flex_basis: R32::zero(),
+            violation: R32::zero(),
             frozen: false,
 
-            hypothetical_inner_size: Size { width: 0.0, height: 0.0 },
-            hypothetical_outer_size: Size { width: 0.0, height: 0.0 },
-            target_size: Size { width: 0.0, height: 0.0 },
-            outer_target_size: Size { width: 0.0, height: 0.0 },
+            hypothetical_inner_size: Size { width: R32::zero(), height: R32::zero() },
+            hypothetical_outer_size: Size { width: R32::zero(), height: R32::zero() },
+            target_size: Size { width: R32::zero(), height: R32::zero() },
+            outer_target_size: Size { width: R32::zero(), height: R32::zero() },
 
-            baseline: 0.0,
+            baseline: R32::zero(),
 
-            offset_main: 0.0,
-            offset_cross: 0.0,
+            offset_main: R32::zero(),
+            offset_cross: R32::zero(),
         })
         .collect();
 
@@ -270,10 +274,11 @@ fn compute_internal(
     // 3. Determine the flex base size and hypothetical main size of each item:
     flex_items.iter_mut().try_for_each(|child| -> Result<()> {
         // A. If the item has a definite used flex basis, that’s the flex base size.
+        let child_style = db.style(child.node);
 
-        let flex_basis = child.node.flex_basis.resolve(node_inner_size.main(dir));
+        let flex_basis = child_style.flex_basis.resolve(node_inner_size.main(dir));
         if flex_basis.is_defined() {
-            child.flex_basis = flex_basis.or_else(0.0);
+            child.flex_basis = flex_basis.or_else(R32::zero());
             return Ok(());
         };
 
@@ -282,9 +287,9 @@ fn compute_internal(
         //    then the flex base size is calculated from its inner
         //    cross size and the flex item’s intrinsic aspect ratio.
 
-        if let Defined(ratio) = child.node.aspect_ratio {
+        if let Defined(ratio) = child_style.aspect_ratio {
             if let Defined(cross) = node_size.cross(dir) {
-                if child.node.flex_basis == Dimension::Auto {
+                if child_style.flex_basis == Dimension::Auto {
                     child.flex_basis = cross * ratio;
                     return Ok(());
                 }
@@ -315,7 +320,7 @@ fn compute_internal(
         //    flex item’s cross size. The flex base size is the item’s resulting main size.
 
         let width: Number = if !child.size.width.is_defined()
-            && child.node.align_self(node) == style::AlignSelf::Stretch
+            && child_style.align_self(&db.style(node)) == style::AlignSelf::Stretch
             && is_column
         {
             available_space.width
@@ -323,14 +328,17 @@ fn compute_internal(
             child.size.width
         };
 
-        let height: Number =
-            if !child.size.height.is_defined() && child.node.align_self(node) == style::AlignSelf::Stretch && is_row {
-                available_space.height
-            } else {
-                child.size.height
-            };
+        let height: Number = if !child.size.height.is_defined()
+            && child_style.align_self(&db.style(node)) == style::AlignSelf::Stretch
+            && is_row
+        {
+            available_space.height
+        } else {
+            child.size.height
+        };
 
         child.flex_basis = compute_internal(
+            db,
             child.node,
             Size {
                 width: width.maybe_max(child.min_size.width).maybe_min(child.max_size.width),
@@ -358,7 +366,7 @@ fn compute_internal(
         // webkit handled various scenarios. Can probably be solved better by passing in
         // min-content max-content constraints from the top
         let min_main = if is_row {
-            compute_internal(child.node, Size { width: Undefined, height: Undefined }, available_space, false)?
+            compute_internal(db, child.node, Size { width: Undefined, height: Undefined }, available_space, false)?
                 .size
                 .width
                 .maybe_max(child.min_size.width)
@@ -396,12 +404,12 @@ fn compute_internal(
 
     let mut flex_lines = {
         let mut lines: Vec<FlexLine> = vec![];
-        let mut line_length = 0.0;
+        let mut line_length = R32::zero();
 
-        if node.flex_wrap == FlexWrap::NoWrap {
-            lines.push(FlexLine { items: flex_items, cross_size: 0.0, offset_cross: 0.0 });
+        if db.style(node).flex_wrap == FlexWrap::NoWrap {
+            lines.push(FlexLine { items: flex_items, cross_size: R32::zero(), offset_cross: R32::zero() });
         } else {
-            let mut line = FlexLine { items: vec![], cross_size: 0.0, offset_cross: 0.0 };
+            let mut line = FlexLine { items: vec![], cross_size: R32::zero(), offset_cross: R32::zero() };
 
             for child in flex_items {
                 line_length += child.hypothetical_outer_size.main(dir);
@@ -410,7 +418,7 @@ fn compute_internal(
                     if line_length > main && !line.items.is_empty() {
                         line_length = child.hypothetical_outer_size.main(dir);
                         lines.push(line);
-                        line = FlexLine { items: vec![], cross_size: 0.0, offset_cross: 0.0 };
+                        line = FlexLine { items: vec![], cross_size: R32::zero(), offset_cross: R32::zero() };
                     }
                 }
 
@@ -434,8 +442,8 @@ fn compute_internal(
         //    use the flex grow factor for the rest of this algorithm; otherwise, use the
         //    flex shrink factor.
 
-        let used_flex_factor: f32 = line.items.iter().map(|child| child.hypothetical_outer_size.main(dir)).sum();
-        let growing = used_flex_factor < node_inner_size.main(dir).or_else(0.0);
+        let used_flex_factor: R32 = line.items.iter().map(|child| child.hypothetical_outer_size.main(dir)).sum();
+        let growing = used_flex_factor < node_inner_size.main(dir).or_else(R32::zero());
         let shrinking = !growing;
 
         // 2. Size inflexible items. Freeze, setting its target main size to its hypothetical main size
@@ -452,6 +460,7 @@ fn compute_internal(
                 child.target_size.set_main(
                     dir,
                     compute_internal(
+                        db,
                         child.node,
                         Size {
                             width: child.size.width.maybe_max(child.min_size.width).maybe_min(child.max_size.width),
@@ -474,7 +483,7 @@ fn compute_internal(
 
             child.outer_target_size.set_main(dir, child.target_size.main(dir) + child.margin.main(dir));
 
-            if (child.node.flex_grow == 0.0 && child.node.flex_shrink == 0.0)
+            if (db.style(child.node).flex_grow == R32::zero() && db.style(child.node).flex_shrink == R32::zero())
                 || (growing && child.flex_basis > child.hypothetical_inner_size.main(dir))
                 || (shrinking && child.flex_basis < child.hypothetical_inner_size.main(dir))
             {
@@ -488,7 +497,7 @@ fn compute_internal(
         //    and subtract this from the flex container’s inner main size. For frozen items,
         //    use their outer target main size; for other items, use their outer flex base size.
 
-        let used_space: f32 = line
+        let used_space: R32 = line
             .items
             .iter()
             .map(|child| {
@@ -496,7 +505,7 @@ fn compute_internal(
             })
             .sum();
 
-        let initial_free_space = (node_inner_size.main(dir) - used_space).or_else(0.0);
+        let initial_free_space = (node_inner_size.main(dir) - used_space).or_else(R32::zero());
 
         // 4. Loop
 
@@ -525,21 +534,21 @@ fn compute_internal(
             //    value is less than the magnitude of the remaining free space, use this
             //    as the remaining free space.
 
-            let used_space: f32 = Iterator::chain(frozen.iter(), unfrozen.iter())
+            let used_space: R32 = Iterator::chain(frozen.iter(), unfrozen.iter())
                 .map(|child| {
                     child.margin.main(dir) + if child.frozen { child.target_size.main(dir) } else { child.flex_basis }
                 })
                 .sum();
 
-            let sum_flex_grow: f32 = unfrozen.iter().map(|item| item.node.flex_grow).sum();
-            let sum_flex_shrink: f32 = unfrozen.iter().map(|item| item.node.flex_shrink).sum();
+            let sum_flex_grow: R32 = unfrozen.iter().map(|item| db.style(item.node).flex_grow).sum();
+            let sum_flex_shrink: R32 = unfrozen.iter().map(|item| db.style(item.node).flex_shrink).sum();
 
             let free_space = if growing && sum_flex_grow < 1.0 {
                 (initial_free_space * sum_flex_grow).maybe_min(node_inner_size.main(dir) - used_space)
             } else if shrinking && sum_flex_shrink < 1.0 {
                 (initial_free_space * sum_flex_shrink).maybe_max(node_inner_size.main(dir) - used_space)
             } else {
-                (node_inner_size.main(dir) - used_space).or_else(0.0)
+                (node_inner_size.main(dir) - used_space).or_else(R32::zero())
             };
 
             // c. Distribute free space proportional to the flex factors.
@@ -562,19 +571,20 @@ fn compute_internal(
             //        Do Nothing
 
             if free_space.is_normal() {
-                if growing && sum_flex_grow > 0.0 {
+                if growing && sum_flex_grow > R32::zero() {
                     unfrozen.iter_mut().for_each(|child| {
-                        child
-                            .target_size
-                            .set_main(dir, child.flex_basis + free_space * (child.node.flex_grow / sum_flex_grow));
+                        child.target_size.set_main(
+                            dir,
+                            child.flex_basis + free_space * (db.style(child.node).flex_grow / sum_flex_grow),
+                        );
                     });
-                } else if shrinking && sum_flex_shrink > 0.0 {
-                    let sum_scaled_shrink_factor: f32 =
-                        unfrozen.iter().map(|child| child.inner_flex_basis * child.node.flex_shrink).sum();
+                } else if shrinking && sum_flex_shrink > R32::zero() {
+                    let sum_scaled_shrink_factor: R32 =
+                        unfrozen.iter().map(|child| child.inner_flex_basis * db.style(child.node).flex_shrink).sum();
 
-                    if sum_scaled_shrink_factor > 0.0 {
+                    if sum_scaled_shrink_factor > R32::zero() {
                         unfrozen.iter_mut().for_each(|child| {
-                            let scaled_shrink_factor = child.inner_flex_basis * child.node.flex_shrink;
+                            let scaled_shrink_factor = child.inner_flex_basis * db.style(child.node).flex_shrink;
                             child.target_size.set_main(
                                 dir,
                                 child.flex_basis + free_space * (scaled_shrink_factor / sum_scaled_shrink_factor),
@@ -589,25 +599,32 @@ fn compute_internal(
             //    item’s target main size was made smaller by this, it’s a max violation.
             //    If the item’s target main size was made larger by this, it’s a min violation.
 
-            let total_violation = unfrozen.iter_mut().try_fold(0.0, |acc, child| -> Result<f32> {
+            let total_violation = unfrozen.iter_mut().try_fold(R32::zero(), |acc, child| -> Result<R32> {
                 // TODO - not really spec abiding but needs to be done somewhere. probably somewhere else though.
                 // The following logic was developed not from the spec but by trail and error looking into how
                 // webkit handled various scenarios. Can probably be solved better by passing in
                 // min-content max-content constraints from the top. Need to figure out correct thing to do here as
                 // just piling on more conditionals.
-                let min_main = if is_row && child.node.measure.is_none() {
-                    compute_internal(child.node, Size { width: Undefined, height: Undefined }, available_space, false)?
-                        .size
-                        .width
-                        .maybe_min(child.size.width)
-                        .maybe_max(child.min_size.width)
-                        .to_number()
+                let min_main = if is_row && db.style(child.node).measure.is_none() {
+                    compute_internal(
+                        db,
+                        child.node,
+                        Size { width: Undefined, height: Undefined },
+                        available_space,
+                        false,
+                    )?
+                    .size
+                    .width
+                    .maybe_min(child.size.width)
+                    .maybe_max(child.min_size.width)
+                    .to_number()
                 } else {
                     child.min_size.main(dir)
                 };
 
                 let max_main = child.max_size.main(dir);
-                let clamped = child.target_size.main(dir).maybe_min(max_main).maybe_max(min_main).max(0.0);
+                let clamped =
+                    Real::max(child.target_size.main(dir).maybe_min(max_main).maybe_max(min_main), R32::zero());
                 child.violation = clamped - child.target_size.main(dir);
                 child.target_size.set_main(dir, clamped);
                 child.outer_target_size.set_main(dir, child.target_size.main(dir) + child.margin.main(dir));
@@ -640,9 +657,9 @@ fn compute_internal(
     container_size.set_main(
         dir,
         node_size.main(dir).or_else({
-            let longest_line = flex_lines.iter().fold(f32::MIN, |acc, line| {
-                let length: f32 = line.items.iter().map(|item| item.outer_target_size.main(dir)).sum();
-                acc.max(length)
+            let longest_line = flex_lines.iter().fold(R32::zero(), |acc, line| {
+                let length: R32 = line.items.iter().map(|item| item.outer_target_size.main(dir)).sum();
+                Real::max(acc, length)
             });
 
             let size = longest_line + padding_border.main(dir);
@@ -668,6 +685,7 @@ fn compute_internal(
             child.hypothetical_inner_size.set_cross(
                 dir,
                 compute_internal(
+                    db,
                     child.node,
                     Size {
                         width: if is_row { child.target_size.width.to_number() } else { child_cross },
@@ -696,7 +714,7 @@ fn compute_internal(
     // TODO - probably should move this somewhere else as it doesn't make a ton of sense here but we need it below
     // TODO - This is expensive and should only be done if we really require a baseline. aka, make it lazy
 
-    fn calc_baseline(layout: &layout::Node) -> f32 {
+    fn calc_baseline(layout: &layout::Node) -> R32 {
         if layout.children.is_empty() {
             layout.size.height
         } else {
@@ -707,6 +725,7 @@ fn compute_internal(
     flex_lines.iter_mut().try_for_each(|line| {
         line.items.iter_mut().try_for_each(|child| -> Result<()> {
             let result = compute_internal(
+                db,
                 child.node,
                 Size {
                     width: if is_row {
@@ -728,9 +747,9 @@ fn compute_internal(
             )?;
 
             child.baseline = calc_baseline(&layout::Node {
-                order: node.children.iter().position(|n| ref_eq(n, child.node)).unwrap() as u32,
+                order: db.children(node).iter().position(|n| ref_eq(n, &child.node)).unwrap() as u32,
                 size: result.size,
-                location: Point { x: 0.0, y: 0.0 },
+                location: Point { x: R32::zero(), y: R32::zero() },
                 children: result.children,
             });
 
@@ -747,7 +766,7 @@ fn compute_internal(
     //    of min/max-width/height applied more generally, this behavior would fall out automatically.
 
     if flex_lines.len() == 1 && node_size.cross(dir).is_defined() {
-        flex_lines[0].cross_size = (node_size.cross(dir) - padding_border.cross(dir)).or_else(0.0);
+        flex_lines[0].cross_size = (node_size.cross(dir) - padding_border.cross(dir)).or_else(R32::zero());
     } else {
         flex_lines.iter_mut().for_each(|line| {
             //    1. Collect all the flex items whose inline-axis is parallel to the main-axis, whose
@@ -762,22 +781,23 @@ fn compute_internal(
             //    3. The used cross-size of the flex line is the largest of the numbers found in the
             //       previous two steps and zero.
 
-            let max_baseline: f32 = line.items.iter().map(|child| child.baseline).fold(0.0, |acc, x| acc.max(x));
+            let max_baseline: R32 = line.items.iter().map(|child| child.baseline).fold(R32::zero(), Real::max);
             line.cross_size = line
                 .items
                 .iter()
                 .map(|child| {
-                    if child.node.align_self(node) == AlignSelf::Baseline
-                        && child.node.cross_margin_start(dir) != Dimension::Auto
-                        && child.node.cross_margin_end(dir) != Dimension::Auto
-                        && child.node.cross_size(dir) == Dimension::Auto
+                    let child_style = db.style(child.node);
+                    if child_style.align_self(&db.style(node)) == AlignSelf::Baseline
+                        && child_style.cross_margin_start(dir) != Dimension::Auto
+                        && child_style.cross_margin_end(dir) != Dimension::Auto
+                        && child_style.cross_size(dir) == Dimension::Auto
                     {
                         max_baseline - child.baseline + child.hypothetical_outer_size.cross(dir)
                     } else {
                         child.hypothetical_outer_size.cross(dir)
                     }
                 })
-                .fold(0.0, |acc, x| acc.max(x));
+                .fold(R32::zero(), Real::max);
         });
     }
 
@@ -787,13 +807,13 @@ fn compute_internal(
     //    by equal amounts such that the sum of their cross sizes exactly equals the
     //    flex container’s inner cross size.
 
-    if node.align_content == AlignContent::Stretch && node_size.cross(dir).is_defined() {
-        let total_cross: f32 = flex_lines.iter().map(|line| line.cross_size).sum();
-        let inner_cross = (node_size.cross(dir) - padding_border.cross(dir)).or_else(0.0);
+    if db.style(node).align_content == AlignContent::Stretch && node_size.cross(dir).is_defined() {
+        let total_cross: R32 = flex_lines.iter().map(|line| line.cross_size).sum();
+        let inner_cross = (node_size.cross(dir) - padding_border.cross(dir)).or_else(R32::zero());
 
         if total_cross < inner_cross {
-            let remaining = inner_cross - total_cross;
-            let addition = remaining / flex_lines.len() as f32;
+            let remaining: R32 = inner_cross - total_cross;
+            let addition: R32 = remaining / R32::from_inner(flex_lines.len() as f32);
             flex_lines.iter_mut().for_each(|line| line.cross_size += addition);
         }
     }
@@ -831,10 +851,10 @@ fn compute_internal(
         line.items.iter_mut().for_each(|child| {
             child.target_size.set_cross(
                 dir,
-                if child.node.align_self(node) == AlignSelf::Stretch
-                    && child.node.cross_margin_start(dir) != Dimension::Auto
-                    && child.node.cross_margin_end(dir) != Dimension::Auto
-                    && child.node.cross_size(dir) == Dimension::Auto
+                if db.style(child.node).align_self(&db.style(node)) == AlignSelf::Stretch
+                    && db.style(child.node).cross_margin_start(dir) != Dimension::Auto
+                    && db.style(child.node).cross_margin_end(dir) != Dimension::Auto
+                    && db.style(child.node).cross_size(dir) == Dimension::Auto
                 {
                     (line_cross_size - child.margin.cross(dir))
                         .maybe_max(child.min_size.cross(dir))
@@ -857,31 +877,31 @@ fn compute_internal(
     //     2. Align the items along the main-axis per justify-content.
 
     flex_lines.iter_mut().for_each(|line| {
-        let used_space: f32 = line.items.iter().map(|child| child.outer_target_size.main(dir)).sum();
+        let used_space: R32 = line.items.iter().map(|child| child.outer_target_size.main(dir)).sum();
         let free_space = inner_container_size.main(dir) - used_space;
         let mut num_auto_margins = 0;
 
         line.items.iter_mut().for_each(|child| {
-            if child.node.main_margin_start(dir) == Dimension::Auto {
+            if db.style(child.node).main_margin_start(dir) == Dimension::Auto {
                 num_auto_margins += 1;
             }
-            if child.node.main_margin_end(dir) == Dimension::Auto {
+            if db.style(child.node).main_margin_end(dir) == Dimension::Auto {
                 num_auto_margins += 1;
             }
         });
 
         if free_space > 0.0 && num_auto_margins > 0 {
-            let margin = free_space / num_auto_margins as f32;
+            let margin: R32 = free_space / R32::from_inner(num_auto_margins as f32);
 
             line.items.iter_mut().for_each(|child| {
-                if child.node.main_margin_start(dir) == Dimension::Auto {
+                if db.style(child.node).main_margin_start(dir) == Dimension::Auto {
                     if is_row {
                         child.margin.start = margin;
                     } else {
                         child.margin.top = margin;
                     }
                 }
-                if child.node.main_margin_end(dir) == Dimension::Auto {
+                if db.style(child.node).main_margin_end(dir) == Dimension::Auto {
                     if is_row {
                         child.margin.end = margin;
                     } else {
@@ -896,31 +916,31 @@ fn compute_internal(
             let justify_item = |(i, child): (usize, &mut FlexItem)| {
                 let is_first = i == 0;
 
-                child.offset_main = match node.justify_content {
+                child.offset_main = match db.style(node).justify_content {
                     JustifyContent::FlexStart => {
                         if layout_reverse && is_first {
                             free_space
                         } else {
-                            0.0
+                            R32::zero()
                         }
                     }
                     JustifyContent::Center => {
                         if is_first {
                             free_space / 2.0
                         } else {
-                            0.0
+                            R32::zero()
                         }
                     }
                     JustifyContent::FlexEnd => {
                         if is_first && !layout_reverse {
                             free_space
                         } else {
-                            0.0
+                            R32::zero()
                         }
                     }
                     JustifyContent::SpaceBetween => {
                         if is_first {
-                            0.0
+                            R32::zero()
                         } else {
                             free_space / (num_items - 1) as f32
                         }
@@ -932,7 +952,7 @@ fn compute_internal(
                             free_space / num_items as f32
                         }
                     }
-                    JustifyContent::SpaceEvenly => free_space / (num_items + 1) as f32,
+                    JustifyContent::SpaceEvenly => free_space / R32::from_inner(num_items as f32 + 1.0),
                 };
             };
 
@@ -956,13 +976,13 @@ fn compute_internal(
 
     flex_lines.iter_mut().for_each(|line| {
         let line_cross_size = line.cross_size;
-        let max_baseline: f32 = line.items.iter_mut().map(|child| child.baseline).fold(0.0, |acc, x| acc.max(x));
+        let max_baseline: R32 = line.items.iter_mut().map(|child| child.baseline).fold(R32::zero(), Real::max);
 
         line.items.iter_mut().for_each(|child| {
             let free_space = line_cross_size - child.outer_target_size.cross(dir);
 
-            if child.node.cross_margin_start(dir) == Dimension::Auto
-                && child.node.cross_margin_end(dir) == Dimension::Auto
+            if db.style(child.node).cross_margin_start(dir) == Dimension::Auto
+                && db.style(child.node).cross_margin_end(dir) == Dimension::Auto
             {
                 if is_row {
                     child.margin.top = free_space / 2.0;
@@ -971,13 +991,13 @@ fn compute_internal(
                     child.margin.start = free_space / 2.0;
                     child.margin.end = free_space / 2.0;
                 }
-            } else if child.node.cross_margin_start(dir) == Dimension::Auto {
+            } else if db.style(child.node).cross_margin_start(dir) == Dimension::Auto {
                 if is_row {
                     child.margin.top = free_space;
                 } else {
                     child.margin.start = free_space;
                 }
-            } else if child.node.cross_margin_end(dir) == Dimension::Auto {
+            } else if db.style(child.node).cross_margin_end(dir) == Dimension::Auto {
                 if is_row {
                     child.margin.bottom = free_space;
                 } else {
@@ -987,18 +1007,18 @@ fn compute_internal(
                 // 14. Align all flex items along the cross-axis per align-self, if neither of the item’s
                 //     cross-axis margins are auto.
 
-                child.offset_cross = match child.node.align_self(node) {
-                    AlignSelf::Auto => 0.0, // Should never happen
+                child.offset_cross = match db.style(child.node).align_self(&db.style(node)) {
+                    AlignSelf::Auto => R32::zero(), // Should never happen
                     AlignSelf::FlexStart => {
                         if is_wrap_reverse {
                             free_space
                         } else {
-                            0.0
+                            R32::zero()
                         }
                     }
                     AlignSelf::FlexEnd => {
                         if is_wrap_reverse {
-                            0.0
+                            R32::zero()
                         } else {
                             free_space
                         }
@@ -1013,7 +1033,7 @@ fn compute_internal(
                             if is_wrap_reverse {
                                 free_space
                             } else {
-                                0.0
+                                R32::zero()
                             }
                         }
                     }
@@ -1021,7 +1041,7 @@ fn compute_internal(
                         if is_wrap_reverse {
                             free_space
                         } else {
-                            0.0
+                            R32::zero()
                         }
                     }
                 };
@@ -1035,16 +1055,14 @@ fn compute_internal(
     //     - Otherwise, use the sum of the flex lines' cross sizes, clamped by the used
     //       min and max cross sizes of the flex container.
 
-    let total_cross_size: f32 = flex_lines.iter().map(|line| line.cross_size).sum();
+    let total_cross_size: R32 = flex_lines.iter().map(|line| line.cross_size).sum();
     container_size.set_cross(dir, node_size.cross(dir).or_else(total_cross_size + padding_border.cross(dir)));
     inner_container_size.set_cross(dir, container_size.cross(dir) - padding_border.cross(dir));
 
     // We have the container size. If our caller does not care about performing
     // layout we are done now.
     if !perform_layout {
-        let result = ComputeResult { size: container_size, children: vec![] };
-        node.layout_cache.replace(Some(LayoutCache { node_size, parent_size, perform_layout, result: result.clone() }));
-        return Ok(result);
+        return Ok(ComputeResult { size: container_size, children: vec![] });
     }
 
     // 16. Align all flex lines per align-content.
@@ -1055,32 +1073,32 @@ fn compute_internal(
     let align_line = |(i, line): (usize, &mut FlexLine)| {
         let is_first = i == 0;
 
-        line.offset_cross = match node.align_content {
+        line.offset_cross = match db.style(node).align_content {
             AlignContent::FlexStart => {
                 if is_first && is_wrap_reverse {
                     free_space
                 } else {
-                    0.0
+                    R32::zero()
                 }
             }
             AlignContent::FlexEnd => {
                 if is_first && !is_wrap_reverse {
                     free_space
                 } else {
-                    0.0
+                    R32::zero()
                 }
             }
             AlignContent::Center => {
                 if is_first {
                     free_space / 2.0
                 } else {
-                    0.0
+                    R32::zero()
                 }
             }
-            AlignContent::Stretch => 0.0,
+            AlignContent::Stretch => R32::zero(),
             AlignContent::SpaceBetween => {
                 if is_first {
-                    0.0
+                    R32::zero()
                 } else {
                     free_space / (num_lines - 1) as f32
                 }
@@ -1113,6 +1131,7 @@ fn compute_internal(
 
             let layout_item = |child: &mut FlexItem| -> Result<()> {
                 let result = compute_internal(
+                    db,
                     child.node,
                     child.target_size.map(|s| s.to_number()),
                     container_size.map(|s| s.to_number()),
@@ -1122,16 +1141,18 @@ fn compute_internal(
                 let offset_main = total_offset_main
                     + child.offset_main
                     + child.margin.main_start(dir)
-                    + (child.position.main_start(dir).or_else(0.0) - child.position.main_end(dir).or_else(0.0));
+                    + (child.position.main_start(dir).or_else(R32::zero())
+                        - child.position.main_end(dir).or_else(R32::zero()));
 
                 let offset_cross = total_offset_cross
                     + child.offset_cross
                     + line_offset_cross
                     + child.margin.cross_start(dir)
-                    + (child.position.cross_start(dir).or_else(0.0) - child.position.cross_end(dir).or_else(0.0));
+                    + (child.position.cross_start(dir).or_else(R32::zero())
+                        - child.position.cross_end(dir).or_else(R32::zero()));
 
                 children.push(layout::Node {
-                    order: node.children.iter().position(|n| ref_eq(n, child.node)).unwrap() as u32,
+                    order: db.children(node).iter().position(|n| ref_eq(n, &child.node)).unwrap() as u32,
                     size: result.size,
                     location: Point {
                         x: if is_row { offset_main } else { offset_cross },
@@ -1176,12 +1197,13 @@ fn compute_internal(
     };
 
     // Before returning we perform absolute layout on all absolutely positioned children
-    let absolute_children: Vec<Result<layout::Node>> = node
-        .children
+    let absolute_children: Vec<Result<layout::Node>> = db
+        .children(node)
         .iter()
         .enumerate()
-        .filter(|(_, child)| child.position_type == PositionType::Absolute)
-        .map(|(order, child)| {
+        .map(|(order, &child_id)| (order, child_id, db.style(child_id)))
+        .filter(|(_, _, child_style)| child_style.position_type == PositionType::Absolute)
+        .map(|(order, child_id, child)| {
             let container_width = container_size.width.to_number();
             let container_height = container_size.height.to_number();
 
@@ -1219,7 +1241,8 @@ fn compute_internal(
                 });
 
             let result = compute_internal(
-                child,
+                db,
+                child_id,
                 Size { width, height },
                 Size { width: container_width, height: container_height },
                 true,
@@ -1240,11 +1263,11 @@ fn compute_internal(
                     .maybe_min(child.max_cross_size(dir).resolve(node_inner_size.cross(dir)));
 
             let offset_main = if start_main.is_defined() {
-                start_main.or_else(0.0) + border.main_start(dir)
+                start_main.or_else(R32::zero()) + border.main_start(dir)
             } else if end_main.is_defined() {
-                free_main_space - end_main.or_else(0.0) - border.main_end(dir)
+                free_main_space - end_main.or_else(R32::zero()) - border.main_end(dir)
             } else {
-                match node.justify_content {
+                match db.style(node).justify_content {
                     JustifyContent::SpaceBetween | JustifyContent::FlexStart => padding_border.main_start(dir),
                     JustifyContent::FlexEnd => free_main_space - padding_border.main_end(dir),
                     JustifyContent::SpaceEvenly | JustifyContent::SpaceAround | JustifyContent::Center => {
@@ -1253,13 +1276,13 @@ fn compute_internal(
                 }
             };
 
-            let offset_cross = if start_cross.is_defined() {
-                start_cross.or_else(0.0) + border.cross_start(dir)
+            let offset_cross: R32 = if start_cross.is_defined() {
+                start_cross.or_else(R32::zero()) + border.cross_start(dir)
             } else if end_cross.is_defined() {
-                free_cross_space - end_cross.or_else(0.0) - border.cross_end(dir)
+                free_cross_space - end_cross.or_else(R32::zero()) - border.cross_end(dir)
             } else {
-                match child.align_self(node) {
-                    AlignSelf::Auto => 0.0, // Should never happen
+                match child.align_self(&db.style(node)) {
+                    AlignSelf::Auto => R32::zero(), // Should never happen
                     AlignSelf::FlexStart => {
                         if is_wrap_reverse {
                             free_cross_space - padding_border.cross_end(dir)
@@ -1302,21 +1325,26 @@ fn compute_internal(
         children.push(abs_child?);
     }
 
-    fn hidden_layout(node: &style::Node, order: u32) -> layout::Node {
+    fn hidden_layout(db: &impl Stretch, node: NodeId, order: u32) -> layout::Node {
         layout::Node {
             order,
-            size: Size { width: 0.0, height: 0.0 },
-            location: Point { x: 0.0, y: 0.0 },
-            children: node.children.iter().enumerate().map(|(order, child)| hidden_layout(child, order as _)).collect(),
+            size: Size { width: R32::zero(), height: R32::zero() },
+            location: Point { x: R32::zero(), y: R32::zero() },
+            children: db
+                .children(node)
+                .iter()
+                .enumerate()
+                .map(|(order, child)| hidden_layout(db, *child, order as _))
+                .collect(),
         }
     }
 
-    let mut hidden_children: Vec<layout::Node> = node
-        .children
+    let mut hidden_children: Vec<layout::Node> = db
+        .children(node)
         .iter()
         .enumerate()
-        .filter(|(_, child)| child.display == Display::None)
-        .map(|(order, child)| hidden_layout(child, order as _))
+        .filter(|(_, child)| db.style(**child).display == Display::None)
+        .map(|(order, &child)| hidden_layout(db, child, order as _))
         .collect();
 
     children.append(&mut hidden_children);
@@ -1324,6 +1352,5 @@ fn compute_internal(
     children.sort_by(|c1, c2| c1.order.cmp(&c2.order));
 
     let result = ComputeResult { size: container_size, children };
-    node.layout_cache.replace(Some(LayoutCache { node_size, parent_size, perform_layout, result: result.clone() }));
     Ok(result)
 }

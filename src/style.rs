@@ -3,12 +3,13 @@ use alloc::boxed::Box;
 #[cfg(not(feature = "std"))]
 use alloc::{vec, vec::Vec};
 
-use crate::algo;
 use crate::geometry::{Rect, Size};
 use crate::number::Number;
 use crate::result::Result;
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+use decorum::R32;
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum AlignItems {
     FlexStart,
     FlexEnd,
@@ -23,7 +24,7 @@ impl Default for AlignItems {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum AlignSelf {
     Auto,
     FlexStart,
@@ -39,7 +40,7 @@ impl Default for AlignSelf {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum AlignContent {
     FlexStart,
     FlexEnd,
@@ -55,7 +56,7 @@ impl Default for AlignContent {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Direction {
     Inherit,
     LTR,
@@ -68,7 +69,7 @@ impl Default for Direction {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Display {
     Flex,
     None,
@@ -80,7 +81,7 @@ impl Default for Display {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum FlexDirection {
     Row,
     Column,
@@ -108,7 +109,7 @@ impl FlexDirection {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum JustifyContent {
     FlexStart,
     FlexEnd,
@@ -124,7 +125,7 @@ impl Default for JustifyContent {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Overflow {
     Visible,
     Hidden,
@@ -137,7 +138,7 @@ impl Default for Overflow {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum PositionType {
     Relative,
     Absolute,
@@ -149,7 +150,7 @@ impl Default for PositionType {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum FlexWrap {
     NoWrap,
     Wrap,
@@ -162,12 +163,12 @@ impl Default for FlexWrap {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Dimension {
     Undefined,
     Auto,
-    Points(f32),
-    Percent(f32),
+    Points(R32),
+    Percent(R32),
 }
 
 impl Default for Dimension {
@@ -194,29 +195,11 @@ impl Dimension {
     }
 }
 
-impl Default for Rect<Dimension> {
-    fn default() -> Rect<Dimension> {
-        Rect { start: Default::default(), end: Default::default(), top: Default::default(), bottom: Default::default() }
-    }
-}
+// FIXME(anp): reconcile this before PR!
+// type MeasureFunc = Box<Fn(Size<Number>) -> Result<Size<f32>> + Send + Sync>;
+type MeasureFunc = &'static fn(Size<Number>) -> Result<Size<R32>>;
 
-impl Default for Size<Dimension> {
-    fn default() -> Size<Dimension> {
-        Size { width: Dimension::Auto, height: Dimension::Auto }
-    }
-}
-
-type MeasureFunc = Box<Fn(Size<Number>) -> Result<Size<f32>>>;
-
-#[derive(Debug, Clone)]
-pub struct LayoutCache {
-    pub node_size: Size<Number>,
-    pub parent_size: Size<Number>,
-    pub perform_layout: bool,
-
-    pub result: algo::ComputeResult,
-}
-
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Node {
     pub display: Display,
 
@@ -238,8 +221,8 @@ pub struct Node {
     pub padding: Rect<Dimension>,
     pub border: Rect<Dimension>,
 
-    pub flex_grow: f32,
-    pub flex_shrink: f32,
+    pub flex_grow: R32,
+    pub flex_shrink: R32,
     pub flex_basis: Dimension,
 
     pub size: Size<Dimension>,
@@ -248,10 +231,6 @@ pub struct Node {
 
     pub aspect_ratio: Number,
     pub measure: Option<MeasureFunc>,
-
-    pub children: Vec<Node>,
-
-    pub layout_cache: core::cell::RefCell<Option<LayoutCache>>,
 }
 
 impl Default for Node {
@@ -277,8 +256,8 @@ impl Default for Node {
             padding: Default::default(),
             border: Default::default(),
 
-            flex_grow: 0.0,
-            flex_shrink: 1.0,
+            flex_grow: 0.0.into(),
+            flex_shrink: 1.0.into(),
             flex_basis: Dimension::Auto,
 
             size: Default::default(),
@@ -287,10 +266,6 @@ impl Default for Node {
 
             aspect_ratio: Default::default(),
             measure: None,
-
-            children: vec![],
-
-            layout_cache: core::cell::RefCell::new(None),
         }
     }
 }

@@ -1,8 +1,9 @@
 use core::ops;
+use decorum::R32;
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, Eq, Hash, PartialEq, Debug)]
 pub enum Number {
-    Defined(f32),
+    Defined(R32),
     Undefined,
 }
 
@@ -20,8 +21,8 @@ impl Default for Number {
     }
 }
 
-impl OrElse<f32> for Number {
-    fn or_else(self, other: f32) -> f32 {
+impl OrElse<R32> for Number {
+    fn or_else(self, other: R32) -> R32 {
         match self {
             Number::Defined(val) => val,
             Number::Undefined => other,
@@ -81,15 +82,15 @@ impl MinMax<Number, Number> for Number {
     }
 }
 
-impl MinMax<f32, Number> for Number {
-    fn maybe_min(self, rhs: f32) -> Number {
+impl MinMax<R32, Number> for Number {
+    fn maybe_min(self, rhs: R32) -> Number {
         match self {
             Number::Defined(val) => Number::Defined(val.min(rhs)),
             Number::Undefined => Number::Undefined,
         }
     }
 
-    fn maybe_max(self, rhs: f32) -> Number {
+    fn maybe_max(self, rhs: R32) -> Number {
         match self {
             Number::Defined(val) => Number::Defined(val.max(rhs)),
             Number::Undefined => Number::Undefined,
@@ -97,15 +98,15 @@ impl MinMax<f32, Number> for Number {
     }
 }
 
-impl MinMax<Number, f32> for f32 {
-    fn maybe_min(self, rhs: Number) -> f32 {
+impl MinMax<Number, R32> for R32 {
+    fn maybe_min(self, rhs: Number) -> R32 {
         match rhs {
             Number::Defined(val) => self.min(val),
             Number::Undefined => self,
         }
     }
 
-    fn maybe_max(self, rhs: Number) -> f32 {
+    fn maybe_max(self, rhs: Number) -> R32 {
         match rhs {
             Number::Defined(val) => self.max(val),
             Number::Undefined => self,
@@ -113,16 +114,16 @@ impl MinMax<Number, f32> for f32 {
     }
 }
 
-impl ToNumber for f32 {
+impl ToNumber for R32 {
     fn to_number(self) -> Number {
         Number::Defined(self)
     }
 }
 
-impl ops::Add<f32> for Number {
+impl ops::Add<R32> for Number {
     type Output = Number;
 
-    fn add(self, rhs: f32) -> Number {
+    fn add(self, rhs: R32) -> Number {
         match self {
             Number::Defined(val) => Number::Defined(val + rhs),
             Number::Undefined => Number::Undefined,
@@ -144,10 +145,10 @@ impl ops::Add<Number> for Number {
     }
 }
 
-impl ops::Sub<f32> for Number {
+impl ops::Sub<R32> for Number {
     type Output = Number;
 
-    fn sub(self, rhs: f32) -> Number {
+    fn sub(self, rhs: R32) -> Number {
         match self {
             Number::Defined(val) => Number::Defined(val - rhs),
             Number::Undefined => Number::Undefined,
@@ -169,10 +170,10 @@ impl ops::Sub<Number> for Number {
     }
 }
 
-impl ops::Mul<f32> for Number {
+impl ops::Mul<R32> for Number {
     type Output = Number;
 
-    fn mul(self, rhs: f32) -> Number {
+    fn mul(self, rhs: R32) -> Number {
         match self {
             Number::Defined(val) => Number::Defined(val * rhs),
             Number::Undefined => Number::Undefined,
@@ -194,10 +195,10 @@ impl ops::Mul<Number> for Number {
     }
 }
 
-impl ops::Div<f32> for Number {
+impl ops::Div<R32> for Number {
     type Output = Number;
 
-    fn div(self, rhs: f32) -> Number {
+    fn div(self, rhs: R32) -> Number {
         match self {
             Number::Defined(val) => Number::Defined(val / rhs),
             Number::Undefined => Number::Undefined,

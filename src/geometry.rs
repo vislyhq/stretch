@@ -3,7 +3,7 @@ use core::ops::Add;
 use crate::number::Number;
 use crate::style;
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Eq, Hash, PartialEq)]
 pub struct Rect<T> {
     pub start: T,
     pub end: T,
@@ -80,7 +80,7 @@ where
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Eq, Hash, PartialEq)]
 pub struct Size<T> {
     pub width: T,
     pub height: T,
@@ -129,7 +129,7 @@ impl<T> Size<T> {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, Default, Eq, Hash, PartialEq)]
 pub struct Point<T> {
     pub x: T,
     pub y: T,
