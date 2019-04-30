@@ -5,7 +5,7 @@
 [![cocoapods](https://img.shields.io/cocoapods/v/StretchKit.svg)](https://cocoapods.org/pods/StretchKit)
 [![bintray](https://api.bintray.com/packages/visly/maven/stretch-kotlin-bindings/images/download.svg)](https://bintray.com/visly/maven/stretch-kotlin-bindings)
 
-Stretch is an implemnetation of Flexbox written in [Rust](https://www.rust-lang.org). The goal of stretch is to provide a solid foundation for layout across all platforms with a specific focus on mobile. Long term we want stretch to not only support flexbox but also many other layout algorithms such as grid layout. Stretch was made for and powers https://visly.app.
+Stretch is an implementation of Flexbox written in [Rust](https://www.rust-lang.org). The goal of stretch is to provide a solid foundation for layout across all platforms with a specific focus on mobile. Long term we want stretch to not only support flexbox but also many other layout algorithms such as grid layout. Stretch was made for and powers https://visly.app.
 
 ## Goals
 Before using or contributing to stretch it is good to be aware of the core goals of the project. These are goals we are working towards, not necessarily features we currently support.
