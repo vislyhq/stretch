@@ -2,9 +2,9 @@
 name = "stretched"
 version = "0.0.1"
 license = "MIT"
-authors = ["Nathan Michlo <NathanJMichlo@gmail.com>"]
+authors = ["Visly Inc.", "Nathan Michlo"]
 description="Python bindings for Stretch (High performance flexbox implementation written in rust.)"
-repository = "https://github.com/nmichlo/stretched"
+repository = "https://github.com/vislyhq/stretch"
 readme = "README.md"
 edition = "2018"
 
@@ -18,5 +18,4 @@ name = "stretched"
 crate-type = ["cdylib"]
 
 [package.metadata.pyo3-pack]
-maintainer = "Nathan Michlo"
-maintainer-email = "NathanJMichlo@gmail.com"
+project-url = "https://github.com/vislyhq/stretch"
