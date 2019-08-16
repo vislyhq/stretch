@@ -1,0 +1,22 @@
+[package]
+name = "stretched"
+version = "0.0.1"
+license = "MIT"
+authors = ["Nathan Michlo <NathanJMichlo@gmail.com>"]
+description="Python bindings for Stretch (High performance flexbox implementation written in rust.)"
+repository = "https://github.com/nmichlo/stretched"
+readme = "README.md"
+edition = "2018"
+
+[dependencies]
+pyo3 = { version = "0.7.0", features = ["extension-module"] }
+dict_derive = "0.1.1"
+stretch = "0.3.2"
+
+[lib]
+name = "stretched"
+crate-type = ["cdylib"]
+
+[package.metadata.pyo3-pack]
+maintainer = "Nathan Michlo"
+maintainer-email = "NathanJMichlo@gmail.com"

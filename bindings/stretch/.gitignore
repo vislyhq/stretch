@@ -1,0 +1,11 @@
+.python-version
+/target
+__pycache__
+.idea/
+*.cpython-*.so
+*.egg-info
+/dist/
+/build/
+*.ignore
+.pytest_cache
+.tox
