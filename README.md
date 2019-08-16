@@ -115,6 +115,7 @@ print("width: \(layout.width), height: \(layout.height)")
 ```
 
 ### JavaScript
+
 ```bash
 > npm install --save stretch-layout
 ```
@@ -132,7 +133,30 @@ const layout = node.computeLayout();
 console.log(layout.width, layout.height);
 ```
 
+### Python
+
+``````bash
+> pip3 install stretched
+``````
+
+```python
+from stretched import Node, Size, Dimension, Style, JustifyContent
+
+node = Node(
+    Style(
+        size=Size(Dimension.new_points(100.0), Dimension.new_points(100.0)), justify_content=JustifyContent.CENTER
+    ), [
+        Node(Style(size=Size(Dimension.new_percent(0.5), Dimension.new_percent(0.5))))
+    ]
+)
+layout = node.compute_layout(Size(None, None))
+
+print("width: {}, height: {}".format(layout.width, layout.height))
+
+```
+
 ## Contributing
+
 Contributions are very welcome. Though we ask that you open an issue or pull request early in the process (before writing code) so we can discuss solutions and additions before you start spending time on implementing them. There are some specific areas where we would be extra happy to receive contributions in.
 
 - Binary size reduction
