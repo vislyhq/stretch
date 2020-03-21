@@ -23,11 +23,11 @@ pub(crate) struct NodeData {
 
 impl NodeData {
     fn new_leaf(style: Style, measure: MeasureFunc) -> Self {
-        NodeData { style, measure: Some(measure), layout_cache: None, layout: Layout::new(), is_dirty: true }
+        Self { style, measure: Some(measure), layout_cache: None, layout: Layout::new(), is_dirty: true }
     }
 
     fn new(style: Style) -> Self {
-        NodeData { style, measure: None, layout_cache: None, layout: Layout::new(), is_dirty: true }
+        Self { style, measure: None, layout_cache: None, layout: Layout::new(), is_dirty: true }
     }
 }
 
@@ -39,7 +39,7 @@ pub(crate) struct Forest {
 
 impl Forest {
     pub fn with_capacity(capacity: usize) -> Self {
-        Forest {
+        Self {
             nodes: Vec::with_capacity(capacity),
             children: Vec::with_capacity(capacity),
             parents: Vec::with_capacity(capacity),

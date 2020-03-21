@@ -39,7 +39,7 @@ pub struct Stretch {
 
 impl Default for Stretch {
     fn default() -> Self {
-        Stretch::with_capacity(16)
+        Self::with_capacity(16)
     }
 }
 
@@ -49,7 +49,7 @@ impl Stretch {
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
-        Stretch {
+        Self {
             id: INSTANCE_ALLOCATOR.allocate(),
             nodes: id::Allocator::new(),
             nodes_to_ids: HashMap::with_capacity(capacity),

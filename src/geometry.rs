@@ -137,8 +137,20 @@ impl<T> Size<T> {
     }
 }
 
+impl Size<f32> {
+    pub fn zero() -> Self {
+        Self { width: 0.0, height: 0.0 }
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Point<T> {
     pub x: T,
     pub y: T,
+}
+
+impl Point<f32> {
+    pub fn zero() -> Self {
+        Self { x: 0.0, y: 0.0 }
+    }
 }
