@@ -1,4 +1,5 @@
 package app.visly.stretch
+
 import androidx.annotation.Keep
 import java.lang.ref.WeakReference
 
@@ -7,11 +8,14 @@ interface MeasureFunc {
 }
 
 private class MeasureFuncImpl(val measureFunc: WeakReference<MeasureFunc>) {
-    @Keep fun measure(width: Float, height: Float): FloatArray {
-        val result = measureFunc.get()!!.measure(Size(
-            if (width.isNaN()) null else width,
-            if (height.isNaN()) null else height
-        ))
+    @Keep
+    fun measure(width: Float, height: Float): FloatArray {
+        val result = measureFunc.get()!!.measure(
+            Size(
+                if (width.isNaN()) null else width,
+                if (height.isNaN()) null else height
+            )
+        )
         return floatArrayOf(result.width, result.height)
     }
 }
@@ -29,20 +33,34 @@ class Node {
     private var measure: MeasureFunc? = null
 
     constructor(style: Style, measure: MeasureFunc) {
-        this.rustptr = nConstructLeaf(Stretch.ptr, style.rustptr, MeasureFuncImpl(WeakReference(measure)))
+        this.rustptr =
+            nConstructLeaf(Stretch.ptr, style.rustptr, MeasureFuncImpl(WeakReference(measure)))
         this.style = style
         this.children = mutableListOf()
         this.measure = measure
     }
 
     constructor(style: Style, children: List<Node>) {
-        this.rustptr = nConstruct(Stretch.ptr, style.rustptr, LongArray(children.size) { children[it].rustptr })
+        this.rustptr = nConstruct(
+            Stretch.ptr,
+            style.rustptr,
+            LongArray(children.size) { children[it].rustptr })
         this.style = style
         this.children = children.toMutableList()
     }
 
-    protected fun finalize() {
+    fun free() {
+        style.free()
         nFree(Stretch.ptr, rustptr)
+    }
+
+    fun freeNodes() {
+        children.forEach {
+            if (it.getChildCount() > 0) {
+                it.freeNodes()
+            }
+        }
+        free()
     }
 
     fun setMeasure(measure: MeasureFunc) {
@@ -102,7 +120,14 @@ class Node {
     }
 
     fun computeLayout(size: Size<Float?>): Layout {
-        val result = Layout.fromFloatArray(nComputeLayout(Stretch.ptr, rustptr, size.width ?: Float.NaN, size.height ?: Float.NaN), 0)
+        val result = Layout.fromFloatArray(
+            nComputeLayout(
+                Stretch.ptr,
+                rustptr,
+                size.width ?: Float.NaN,
+                size.height ?: Float.NaN
+            ), 0
+        )
         return result.second
     }
 
@@ -112,11 +137,22 @@ class Node {
     private external fun nSetMeasure(stretch: Long, ptr: Long, measure: MeasureFuncImpl)
     private external fun nSetChildren(stretch: Long, ptr: Long, children: LongArray)
     private external fun nAddChild(stretch: Long, ptr: Long, child: Long)
-    private external fun nReplaceChildAtIndex(stretch: Long, ptr: Long, index: Int, child: Long): Long
+    private external fun nReplaceChildAtIndex(
+        stretch: Long,
+        ptr: Long,
+        index: Int,
+        child: Long
+    ): Long
+
     private external fun nRemoveChild(stretch: Long, ptr: Long, child: Long): Long
     private external fun nRemoveChildAtIndex(stretch: Long, ptr: Long, index: Int): Long
     private external fun nSetStyle(stretch: Long, ptr: Long, args: Long): Boolean
     private external fun nIsDirty(stretch: Long, ptr: Long): Boolean
     private external fun nMarkDirty(stretch: Long, ptr: Long)
-    private external fun nComputeLayout(stretch: Long, ptr: Long, width: Float, height: Float): FloatArray
+    private external fun nComputeLayout(
+        stretch: Long,
+        ptr: Long,
+        width: Float,
+        height: Float
+    ): FloatArray
 }

@@ -95,13 +95,15 @@ sealed class Dimension {
 
 data class Size<T>(
     val width: T,
-    val height: T)
+    val height: T
+)
 
 data class Rect<T>(
     val start: T,
     val end: T,
     val top: T,
-    val bottom: T)
+    val bottom: T
+)
 
 data class Style(
     val display: Display = Display.Flex,
@@ -114,17 +116,38 @@ data class Style(
     val alignSelf: AlignSelf = AlignSelf.Auto,
     val alignContent: AlignContent = AlignContent.FlexStart,
     val justifyContent: JustifyContent = JustifyContent.FlexStart,
-    val position: Rect<Dimension> = Rect(Dimension.Undefined, Dimension.Undefined, Dimension.Undefined, Dimension.Undefined),
-    val margin: Rect<Dimension> = Rect(Dimension.Undefined, Dimension.Undefined, Dimension.Undefined, Dimension.Undefined),
-    val padding: Rect<Dimension> = Rect(Dimension.Undefined, Dimension.Undefined, Dimension.Undefined, Dimension.Undefined),
-    val border: Rect<Dimension> = Rect(Dimension.Undefined, Dimension.Undefined, Dimension.Undefined, Dimension.Undefined),
+    val position: Rect<Dimension> = Rect(
+        Dimension.Undefined,
+        Dimension.Undefined,
+        Dimension.Undefined,
+        Dimension.Undefined
+    ),
+    val margin: Rect<Dimension> = Rect(
+        Dimension.Undefined,
+        Dimension.Undefined,
+        Dimension.Undefined,
+        Dimension.Undefined
+    ),
+    val padding: Rect<Dimension> = Rect(
+        Dimension.Undefined,
+        Dimension.Undefined,
+        Dimension.Undefined,
+        Dimension.Undefined
+    ),
+    val border: Rect<Dimension> = Rect(
+        Dimension.Undefined,
+        Dimension.Undefined,
+        Dimension.Undefined,
+        Dimension.Undefined
+    ),
     val flexGrow: Float = 0f,
     val flexShrink: Float = 1f,
     val flexBasis: Dimension = Dimension.Auto,
     val size: Size<Dimension> = Size(Dimension.Auto, Dimension.Auto),
     val minSize: Size<Dimension> = Size(Dimension.Auto, Dimension.Auto),
     val maxSize: Size<Dimension> = Size(Dimension.Auto, Dimension.Auto),
-    val aspectRatio: Float? = null) {
+    val aspectRatio: Float? = null
+) {
 
     companion object {
         init {
@@ -208,7 +231,7 @@ data class Style(
         )
     }
 
-    protected fun finalize() {
+    fun free() {
         nFree(rustptr)
     }
 
@@ -298,10 +321,14 @@ data class Style(
         private var alignSelf: AlignSelf = AlignSelf.Auto
         private var alignContent: AlignContent = AlignContent.FlexStart
         private var justifyContent: JustifyContent = JustifyContent.FlexStart
-        private var position: Rect<Dimension> = Rect(Dimension.Undefined, Dimension.Undefined, Dimension.Undefined, Dimension.Undefined)
-        private var margin: Rect<Dimension> = Rect(Dimension.Undefined, Dimension.Undefined, Dimension.Undefined, Dimension.Undefined)
-        private var padding: Rect<Dimension> = Rect(Dimension.Undefined, Dimension.Undefined, Dimension.Undefined, Dimension.Undefined)
-        private var border: Rect<Dimension> = Rect(Dimension.Undefined, Dimension.Undefined, Dimension.Undefined, Dimension.Undefined)
+        private var position: Rect<Dimension> =
+            Rect(Dimension.Undefined, Dimension.Undefined, Dimension.Undefined, Dimension.Undefined)
+        private var margin: Rect<Dimension> =
+            Rect(Dimension.Undefined, Dimension.Undefined, Dimension.Undefined, Dimension.Undefined)
+        private var padding: Rect<Dimension> =
+            Rect(Dimension.Undefined, Dimension.Undefined, Dimension.Undefined, Dimension.Undefined)
+        private var border: Rect<Dimension> =
+            Rect(Dimension.Undefined, Dimension.Undefined, Dimension.Undefined, Dimension.Undefined)
         private var flexGrow: Float = 0f
         private var flexShrink: Float = 1f
         private var flexBasis: Dimension = Dimension.Auto
