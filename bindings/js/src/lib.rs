@@ -417,7 +417,7 @@ impl Node {
     pub fn new(allocator: &Allocator, style: &JsValue) -> Self {
         Self {
             allocator: allocator.clone(),
-            node: allocator.stretch.borrow_mut().new_node(parse_style(&style), vec![]).unwrap(),
+            node: allocator.stretch.borrow_mut().new_node(parse_style(&style), &[]).unwrap(),
             style: style.clone(),
             childCount: 0,
         }
@@ -432,7 +432,9 @@ impl Node {
             .borrow_mut()
             .set_measure(
                 self.node,
-                Some(Box::new(move |constraints| {
+                Some(stretch::node::MeasureFunc::Boxed(Box::new(move |constraints| {
+                    use stretch::number::OrElse;
+
                     let widthConstraint = if let stretch::number::Number::Defined(val) = constraints.width {
                         val.into()
                     } else {
@@ -450,12 +452,12 @@ impl Node {
                         let height = get_f32(&result, "height");
 
                         if width.is_some() && height.is_some() {
-                            return Ok(stretch::geometry::Size { width: width.unwrap(), height: height.unwrap() });
+                            return stretch::geometry::Size { width: width.unwrap(), height: height.unwrap() };
                         }
                     }
 
-                    Err(Box::new("Failed in javascript"))
-                })),
+                    constraints.map(|v| v.or_else(0.0))
+                }))),
             )
             .unwrap();
     }
@@ -574,21 +576,32 @@ fn parse_style(style: &JsValue) -> stretch::style::Style {
         flex_shrink: get_f32(style, "flexShrink").unwrap_or(1.0),
         flex_basis: get_dimension(style, "flexBasis"),
 
-        size: stretch::geometry::Size { width: get_dimension(style, "width"), height: get_dimension(style, "height") },
+        size: stretch::geometry::Size {
+            width: get_size_dimension(style, "width"),
+            height: get_size_dimension(style, "height"),
+        },
 
         min_size: stretch::geometry::Size {
-            width: get_dimension(style, "minWidth"),
-            height: get_dimension(style, "minHeight"),
+            width: get_size_dimension(style, "minWidth"),
+            height: get_size_dimension(style, "minHeight"),
         },
 
         max_size: stretch::geometry::Size {
-            width: get_dimension(style, "maxWidth"),
-            height: get_dimension(style, "maxHeight"),
+            width: get_size_dimension(style, "maxWidth"),
+            height: get_size_dimension(style, "maxHeight"),
         },
 
         aspect_ratio: get_f32(style, "aspectRatio")
             .map(stretch::number::Number::Defined)
             .unwrap_or(stretch::number::Number::Undefined),
+    }
+}
+
+fn get_size_dimension(obj: &JsValue, key: &str) -> stretch::style::Dimension {
+    let dimension = get_dimension(obj, key);
+    match dimension {
+        stretch::style::Dimension::Undefined => stretch::style::Dimension::Auto,
+        _ => dimension,
     }
 }
 
