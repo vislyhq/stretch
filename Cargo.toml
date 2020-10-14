@@ -55,5 +55,9 @@ harness = false
 name = "complex"
 harness = false
 
+[[bench]]
+name = "simple_deep"
+harness = false
+
 [workspace]
 members = [ "scripts/gentest" ]
