@@ -425,9 +425,9 @@ fn generate_node(ident: &str, node: &json::JsonValue) -> TokenStream {
                     .enumerate()
                     .map(|(i, _)| Ident::new(&format!("{}{}", ident, i), Span::call_site()))
                     .collect::<Vec<_>>();
-                (body, quote!(vec![#(#idents),*]))
+                (body, quote!(&[#(#idents),*]))
             } else {
-                (quote!(), quote!(vec![]))
+                (quote!(), quote!(&[]))
             }
         }
         _ => (quote!(), quote!()),
